@@ -502,7 +502,6 @@ app.get('/branch', (req, res) => {
   
       const invoices = [];
   
-      // Iterate through invoice IDs and fetch data from bill_invoices
       invoiceIds.slice(0, limit).forEach((invoice) => {
         const invoiceId = invoice.invoice_id;
   
@@ -528,7 +527,6 @@ app.get('/branch', (req, res) => {
               if (leadData.length > 0) {
                 const branchId = leadData[0].branch_id;
   
-                // Fetch total_amount and patient_id from bill_invoices
                 const billInvoiceQuery = 'SELECT total_amount, patient_id FROM bill_invoices WHERE id = ?';
   
                 pool.query(billInvoiceQuery, [invoiceId], (err, billInvoiceData) => {
@@ -541,7 +539,6 @@ app.get('/branch', (req, res) => {
                     const totalAmount = billInvoiceData[0].total_amount;
                     const patientId = billInvoiceData[0].patient_id;
   
-                    // Fetch first_name and last_name from patients
                     const patientQuery = 'SELECT first_name, last_name FROM patients WHERE id = ?';
   
                     pool.query(patientQuery, [patientId], (err, patientData) => {
@@ -563,9 +560,7 @@ app.get('/branch', (req, res) => {
                           last_name: lastName,
                         });
   
-                        // If all invoices have been processed or reached the limit, send the response
                         if (invoices.length === invoiceIds.slice(0, limit).length) {
-                          // Group invoices by branch_id
                           const groupedInvoices = groupInvoicesByBranch(invoices);
   
                           res.json(groupedInvoices);
@@ -582,7 +577,6 @@ app.get('/branch', (req, res) => {
     });
   });
   
-  // Function to group invoices by branch_id
   function groupInvoicesByBranch(invoices) {
     const groupedInvoices = {};
   
@@ -603,10 +597,8 @@ app.get('/branch', (req, res) => {
   }
   
   app.get('/testing', (req, res) => {
-    // Get the "list" query parameter to limit the number of results (default to 10)
     const limit = req.query.list ? parseInt(req.query.list) : 10;
 
-    // Fetch all invoice IDs from bill_invoice_items
     const query = 'SELECT DISTINCT invoice_id FROM bill_invoice_items';
 
     pool.query(query, (err, invoiceIds) => {
@@ -621,7 +613,6 @@ app.get('/branch', (req, res) => {
 
         const invoices = [];
 
-        // Iterate through invoice IDs and fetch data from bill_invoices
         invoiceIds.slice(0, limit).forEach((invoice) => {
             const invoiceId = invoice.invoice_id;
 
@@ -647,7 +638,6 @@ app.get('/branch', (req, res) => {
                         if (leadData.length > 0) {
                             const branchId = leadData[0].branch_id;
 
-                            // Fetch total_amount and patient_id from bill_invoices
                             const billInvoiceQuery = 'SELECT total_amount, patient_id FROM bill_invoices WHERE id = ?';
 
                             pool.query(billInvoiceQuery, [invoiceId], (err, billInvoiceData) => {
@@ -660,7 +650,6 @@ app.get('/branch', (req, res) => {
                                     const totalAmount = billInvoiceData[0].total_amount;
                                     const patientId = billInvoiceData[0].patient_id;
 
-                                    // Fetch first_name and last_name from patients
                                     const patientQuery = 'SELECT first_name, last_name FROM patients WHERE id = ?';
 
                                     pool.query(patientQuery, [patientId], (err, patientData) => {
@@ -673,7 +662,6 @@ app.get('/branch', (req, res) => {
                                             const firstName = patientData[0].first_name;
                                             const lastName = patientData[0].last_name;
 
-                                            // Fetch lead_id and schedule_id from patient_activity_alike_services
                                             const patientActivityQuery = 'SELECT lead_id, schedule_id FROM patient_activity_alike_services WHERE patient_id = ?';
 
                                             pool.query(patientActivityQuery, [patientId], (err, activityData) => {
@@ -686,7 +674,6 @@ app.get('/branch', (req, res) => {
                                                     const leadIdFromActivity = activityData[0].lead_id;
                                                     const scheduleId = activityData[0].schedule_id;
 
-                                                    // Fetch bed_id and amount from patient_schedules
                                                     const scheduleQuery = 'SELECT bed_id, amount, membership_type FROM patient_schedules WHERE id = ?';
 
                                                     pool.query(scheduleQuery, [scheduleId], (err, scheduleData) => {
@@ -700,7 +687,6 @@ app.get('/branch', (req, res) => {
                                                             const amount = scheduleData[0].amount;
                                                             const membershipType = scheduleData[0].membership_type;
 
-                                                            // Fetch room_id from master_beds using bed_id
                                                             const bedQuery = 'SELECT room_id FROM master_beds WHERE id = ?';
 
                                                             pool.query(bedQuery, [bedId], (err, bedData) => {
@@ -725,9 +711,7 @@ app.get('/branch', (req, res) => {
                                                                         room_id: roomId,
                                                                     });
 
-                                                                    // If all invoices have been processed or reached the limit, send the response
                                                                     if (invoices.length === invoiceIds.slice(0, limit).length) {
-                                                                        // Group invoices by branch_id
                                                                         const groupedInvoices = groupInvoicesByBranch(invoices);
 
                                                                         res.json(groupedInvoices);
@@ -750,7 +734,6 @@ app.get('/branch', (req, res) => {
     });
 });
 
-// Function to group invoices by branch_id
 function groupInvoicesByBranch(invoices) {
     const groupedInvoices = {};
 
@@ -772,14 +755,12 @@ function groupInvoicesByBranch(invoices) {
 
   
 app.get('/pew', (req, res) => {
-  // Get query parameters
   const limit = req.query.list ? parseInt(req.query.list) : 10;
   const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
   const start = req.query.start;
   const end = req.query.end;
   const membershipType = req.query.membership;
 
-  // Construct the base SQL query
   let query = `
       SELECT
           l.branch_id,
@@ -845,14 +826,12 @@ app.get('/pew', (req, res) => {
           return res.status(404).json({ error: 'No invoices found' });
       }
 
-      // Group invoices by branch
       const groupedInvoices = groupInvoicesByBranch(results);
 
       res.json(groupedInvoices);
   });
 });
 
-// Function to group invoices by branch_id
 function groupInvoicesByBranch(invoices) {
   const groupedInvoices = {};
 
@@ -873,7 +852,6 @@ function groupInvoicesByBranch(invoices) {
 }
 
 
-// Function to group invoices by branch_id
 function groupInvoicesByBranch(invoices) {
   const groupedInvoices = {};
 
@@ -894,7 +872,6 @@ function groupInvoicesByBranch(invoices) {
 }
 
 
-// Function to group invoices by branch_id
 function groupInvoicesByBranch(invoices) {
   const groupedInvoices = {};
 
@@ -916,8 +893,8 @@ function groupInvoicesByBranch(invoices) {
 
 
   app.get('/test', (req, res) => {
-    const start = req.query.start; // Start timestamp
-    const end = req.query.end;     // End timestamp
+    const start = req.query.start;
+    const end = req.query.end;   
   
     if (!start || !end) {
       return res.status(400).json({ error: 'Missing parameters' });
@@ -990,13 +967,11 @@ function groupInvoicesByBranch(invoices) {
         return res.status(500).json({ error: 'Database error' });
       }
   
-      // Check if any results were found
       if (results.length === 0) {
         return res.status(404).json({ error: 'Patient data not found' });
       }
   
-      // Send the data as a JSON response
-     // res.json(results[0]);
+     res.json(results[0]);
       console.log(results[0])
     });
   });
@@ -1004,12 +979,10 @@ function groupInvoicesByBranch(invoices) {
 
 
   app.get('/procedureServiceTotals', (req, res) => {
-    // Extract branch_id, start, and end date from query parameters
     const branchId = req.query.branch_id;
     const start = req.query.start;
     const end = req.query.end;
 
-    // Construct the base SQL query
     let query = `
         SELECT
             l.branch_id,
@@ -1022,12 +995,10 @@ function groupInvoicesByBranch(invoices) {
             ON paas.lead_id = l.id
     `;
 
-    // Add branch filtering if branch_id is provided
     if (branchId) {
         query += `WHERE l.branch_id = ? `;
     }
 
-    // Add date filtering if start and end dates are provided
     if (start && end) {
         if (branchId) {
             query += `AND `;
@@ -1037,10 +1008,8 @@ function groupInvoicesByBranch(invoices) {
         query += `paas.created_at >= ? AND paas.created_at <= ? `;
     }
 
-    // Group the results by branch_id and patient_id
     query += `GROUP BY l.branch_id, paas.patient_id;`;
 
-    // Execute the SQL query with optional parameters
     const queryParams = branchId ? [branchId, start, end] : [start, end];
 
     pool.query(query, queryParams, (err, results) => {
@@ -1053,14 +1022,12 @@ function groupInvoicesByBranch(invoices) {
             return res.status(404).json({ error: 'No procedural service data found' });
         }
 
-        // Group procedural service data by branch
         const groupedData = groupProceduralServiceByBranch(results);
 
         res.json(groupedData);
     });
 });
 
-// Function to group procedural service data by branch
 function groupProceduralServiceByBranch(data) {
     const groupedData = {};
 
@@ -1083,7 +1050,6 @@ function groupProceduralServiceByBranch(data) {
     return Object.values(groupedData);
 }
 
-// Function to group procedural service data by branch
 function groupProceduralServiceByBranch(data) {
     const groupedData = {};
 
