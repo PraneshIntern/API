@@ -487,7 +487,7 @@ app.get('/branch', (req, res) => {
     // Get the "list" query parameter to limit the number of results (default to 10)
     const limit = req.query.list ? parseInt(req.query.list) : 10;
   
-
+    // Fetch all invoice IDs from bill_invoice_items
     const query = 'SELECT DISTINCT invoice_id FROM bill_invoice_items';
   
     pool.query(query, (err, invoiceIds) => {
@@ -1471,15 +1471,6 @@ app.get('/branchSummary', (req, res) => {
     );
   });
 });
-
-
-
-
-
-
-
-
-
 
 
 app.listen(port, () => {
