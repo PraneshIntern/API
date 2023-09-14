@@ -1073,7 +1073,424 @@ function groupProceduralServiceByBranch(data) {
     return Object.values(groupedData);
 }
 
-  
+app.get('/kek', (req, res) => {
+  const bedNumber = req.query.bed_number;
+
+  const query = `
+    SELECT branch.id AS branch_id, branch.branch_name, branch.branch_city, branch.branch_state, branch.branch_country,
+    room.id AS room_id, room.room_number AS room_number, bed.id AS bed_id, bed.bed_number AS bed_number
+    FROM master_branches AS branch
+    LEFT JOIN master_rooms AS room ON branch.id = room.branch_id
+    LEFT JOIN master_beds AS bed ON room.id = bed.room_id
+    WHERE bed.bed_number = ?`;
+
+  if (!bedNumber) {
+    return res.status(400).json({ error: 'Missing bed_number parameter' });
+  }
+
+  pool.query(query, [bedNumber], (err, results) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    res.json(results);
+  });
+});
+
+app.get('/master', (req, res) => {
+  const patientId = req.query.patient_id;
+  const start = req.query.start;
+  const end = req.query.end;
+
+  if (!patientId || !start || !end) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+
+  const patientQuery = `
+    SELECT
+      branch_id,
+      name_prefix,
+      first_name,
+      middle_name,
+      last_name,
+      email,
+      age,
+      marital_status,
+      gender,
+      enquirer_address
+    FROM
+      patients
+    WHERE
+      id = ?;
+  `;
+
+  // Query to fetch schedules data
+  const schedulesQuery = `
+    SELECT
+      membership_type
+    FROM
+      patient_schedules
+    WHERE
+      patient_id = ?
+      AND created_at >= ? AND created_at <= ?;
+  `;
+
+  // Query to fetch procedure service data
+  const procedureServiceQuery = `
+    SELECT
+      SUM(procedure_service_amount) AS procedure_service_total
+    FROM
+      patient_activity_procedure_service
+    WHERE
+      patient_id = ?
+      AND created_at >= ? AND created_at <= ?;
+  `;
+
+  // Query to fetch FB amount data
+  const fbAmountQuery = `
+    SELECT
+      SUM(fb_amount) AS fb_amount_total
+    FROM
+      patient_activity_fb
+    WHERE
+      patient_id = ?
+      AND created_at >= ? AND created_at <= ?;
+  `;
+
+  const extraServiceQuery = `
+    SELECT
+      SUM(extra_service_amount) AS extra_service_total
+    FROM
+      patient_activity_staff_extra_service
+    WHERE
+      patient_id = ?
+      AND created_at >= ? AND created_at <= ?;
+  `;
+
+  const alikeServiceQuery = `
+    SELECT
+      paas.schedule_id,
+      SUM(ps.amount) AS alike_service_total
+    FROM
+      patient_activity_alike_services AS paas
+    JOIN
+      patient_schedules AS ps
+      ON paas.schedule_id = ps.id
+    WHERE
+      paas.patient_id = ?
+      AND ps.created_at >= ? AND ps.created_at <= ?
+    GROUP BY
+      paas.schedule_id;
+  `;
+
+  // Query to fetch debit_amount and advance_amount from bill_patient_advance_log
+  const advanceLogQuery = `
+    SELECT
+      SUM(debit_amount) AS debit_amount_total,
+      SUM(advance_amount) AS advance_amount_total
+    FROM
+      bill_patient_advance_log
+    WHERE
+      patient_id = ?
+      AND created_at >= ? AND created_at <= ?;
+  `;
+
+  // Query to fetch total_amount and amount_paid from consolidated_bill
+  const consolidatedBillQuery = `
+    SELECT
+      total_amount,
+      amount_paid
+    FROM
+      consolidated_bill
+    WHERE
+      patient_id = ?
+      AND created_at >= ? AND created_at <= ?;
+  `;
+
+  // Execute the patient query
+  pool.query(patientQuery, [patientId], (err, patientData) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    // Execute the schedules query
+    pool.query(
+      schedulesQuery,
+      [patientId, start, end],
+      (err, schedulesData) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        // Execute the procedure service query
+        pool.query(
+          procedureServiceQuery,
+          [patientId, start, end],
+          (err, procedureServiceData) => {
+            if (err) {
+              console.error(err);
+              return res.status(500).json({ error: 'Database error' });
+            }
+
+            // Execute the FB amount query
+            pool.query(
+              fbAmountQuery,
+              [patientId, start, end],
+              (err, fbAmountData) => {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).json({ error: 'Database error' });
+                }
+
+                pool.query(
+                  extraServiceQuery,
+                  [patientId, start, end],
+                  (err, extraServiceData) => {
+                    if (err) {
+                      console.error(err);
+                      return res.status(500).json({ error: 'Database error' });
+                    }
+
+                    pool.query(
+                      alikeServiceQuery,
+                      [patientId, start, end],
+                      (err, alikeServiceData) => {
+                        if (err) {
+                          console.error(err);
+                          return res.status(500).json({ error: 'Database error' });
+                        }
+
+                        pool.query(
+                          advanceLogQuery,
+                          [patientId, start, end],
+                          (err, advanceLogData) => {
+                            if (err) {
+                              console.error(err);
+                              return res.status(500).json({ error: 'Database error' });
+                            }
+
+                            pool.query(
+                              consolidatedBillQuery,
+                              [patientId, start, end],
+                              (err, consolidatedBillData) => {
+                                if (err) {
+                                  console.error(err);
+                                  return res.status(500).json({ error: 'Database error' });
+                                }
+
+                                const response = {
+                                  patientData: patientData[0],
+                                  schedulesData: schedulesData[0],
+                                  procedureServiceData: procedureServiceData[0],
+                                  fbAmountData: fbAmountData[0],
+                                  extraServiceData: extraServiceData[0],
+                                  alikeServiceData: alikeServiceData[0],
+                                  advanceLogData: advanceLogData[0],
+                                  consolidatedBillData: consolidatedBillData[0],
+                                };
+
+                                res.json(response);
+                              }
+                            );
+                          }
+                        );
+                      }
+                    );
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  });
+});
+
+
+
+
+app.get('/branchSummary', (req, res) => {
+  const branchId = req.query.branch_id;
+
+  if (!branchId) {
+    return res.status(400).json({ error: 'Missing required branch_id parameter' });
+  }
+
+  const patientBranchQuery = `
+    SELECT
+      id AS patient_id,
+      branch_id
+    FROM
+      patients
+    WHERE
+      branch_id = ?;
+  `;
+
+  pool.query(patientBranchQuery, [branchId], (err, patientBranchData) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    const patientIds = patientBranchData.map(patient => patient.patient_id);
+
+    const billInvoicesQuery = `
+      SELECT
+        SUM(total_amount) AS total_amount_paid
+      FROM
+        bill_invoices
+      WHERE
+        patient_id IN (?)
+        AND status = 'Paid';
+    `;
+
+    const consolidatedBillQuery = `
+      SELECT
+        SUM(amount_paid) AS total_amount_paid
+      FROM
+        consolidated_bill
+      WHERE
+        patient_id IN (?)
+        AND payment_status = 'Paid';
+    `;
+
+    const procedureServiceQuery = `
+      SELECT
+        SUM(procedure_service_amount) AS procedure_service_total
+      FROM
+        patient_activity_procedure_service
+      WHERE
+        patient_id IN (?)
+        AND invoice_status = 'Billed';
+    `;
+
+    const billInvoiceItemsQuery = `
+      SELECT
+        SUM(total_amount) AS billed_total_amount
+      FROM
+        bill_invoice_items
+      WHERE
+        patient_id IN (?)
+        AND type = 'billed';
+    `;
+
+    const alikeServicesQuery = `
+      SELECT
+        paas.patient_id,
+        SUM(ps.amount) AS alike_service_total
+      FROM
+        patient_activity_alike_services AS paas
+      JOIN
+        patient_schedules AS ps
+        ON paas.schedule_id = ps.id
+      WHERE
+        paas.patient_id IN (?)
+      GROUP BY
+        paas.patient_id;
+    `;
+
+    const fbAmountQuery = `
+      SELECT
+        SUM(fb_amount) AS fb_amount_total
+      FROM
+        patient_activity_fb
+      WHERE
+        patient_id IN (?)
+        AND invoice_status = 'billed';
+    `;
+
+    pool.query(
+      billInvoicesQuery,
+      [patientIds],
+      (err, billInvoicesData) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        pool.query(
+          consolidatedBillQuery,
+          [patientIds],
+          (err, consolidatedBillData) => {
+            if (err) {
+              console.error(err);
+              return res.status(500).json({ error: 'Database error' });
+            }
+
+            pool.query(
+              procedureServiceQuery,
+              [patientIds],
+              (err, procedureServiceData) => {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).json({ error: 'Database error' });
+                }
+
+                pool.query(
+                  billInvoiceItemsQuery,
+                  [patientIds],
+                  (err, billInvoiceItemsData) => {
+                    if (err) {
+                      console.error(err);
+                      return res.status(500).json({ error: 'Database error' });
+                    }
+
+                    pool.query(
+                      alikeServicesQuery,
+                      [patientIds],
+                      (err, alikeServicesData) => {
+                        if (err) {
+                          console.error(err);
+                          return res.status(500).json({ error: 'Database error' });
+                        }
+
+                        pool.query(
+                          fbAmountQuery,
+                          [patientIds],
+                          (err, fbAmountData) => {
+                            if (err) {
+                              console.error(err);
+                              return res.status(500).json({ error: 'Database error' });
+                            }
+
+                            const response = {
+                              total_amount_paid: billInvoicesData[0].total_amount_paid || 0,
+                              consolidated_total_amount_paid: consolidatedBillData[0].total_amount_paid || 0,
+                              procedure_service_total: procedureServiceData[0].procedure_service_total || 0,
+                              billed_total_amount: billInvoiceItemsData[0].billed_total_amount || 0,
+                              alike_service_data: alikeServicesData,
+                              fb_amount_total: fbAmountData[0].fb_amount_total || 0,
+                            };
+
+                            res.json(response);
+                          }
+                        );
+                      }
+                    );
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  });
+});
+
+
+
+
+
+
+
+
+
+
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
