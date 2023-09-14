@@ -487,7 +487,7 @@ app.get('/branch', (req, res) => {
     // Get the "list" query parameter to limit the number of results (default to 10)
     const limit = req.query.list ? parseInt(req.query.list) : 10;
   
-    // Fetch all invoice IDs from bill_invoice_items
+
     const query = 'SELECT DISTINCT invoice_id FROM bill_invoice_items';
   
     pool.query(query, (err, invoiceIds) => {
@@ -1124,7 +1124,6 @@ app.get('/master', (req, res) => {
       id = ?;
   `;
 
-  // Query to fetch schedules data
   const schedulesQuery = `
     SELECT
       membership_type
@@ -1135,7 +1134,6 @@ app.get('/master', (req, res) => {
       AND created_at >= ? AND created_at <= ?;
   `;
 
-  // Query to fetch procedure service data
   const procedureServiceQuery = `
     SELECT
       SUM(procedure_service_amount) AS procedure_service_total
@@ -1146,7 +1144,6 @@ app.get('/master', (req, res) => {
       AND created_at >= ? AND created_at <= ?;
   `;
 
-  // Query to fetch FB amount data
   const fbAmountQuery = `
     SELECT
       SUM(fb_amount) AS fb_amount_total
@@ -1183,7 +1180,6 @@ app.get('/master', (req, res) => {
       paas.schedule_id;
   `;
 
-  // Query to fetch debit_amount and advance_amount from bill_patient_advance_log
   const advanceLogQuery = `
     SELECT
       SUM(debit_amount) AS debit_amount_total,
@@ -1195,7 +1191,6 @@ app.get('/master', (req, res) => {
       AND created_at >= ? AND created_at <= ?;
   `;
 
-  // Query to fetch total_amount and amount_paid from consolidated_bill
   const consolidatedBillQuery = `
     SELECT
       total_amount,
@@ -1207,14 +1202,12 @@ app.get('/master', (req, res) => {
       AND created_at >= ? AND created_at <= ?;
   `;
 
-  // Execute the patient query
   pool.query(patientQuery, [patientId], (err, patientData) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: 'Database error' });
     }
 
-    // Execute the schedules query
     pool.query(
       schedulesQuery,
       [patientId, start, end],
@@ -1224,7 +1217,6 @@ app.get('/master', (req, res) => {
           return res.status(500).json({ error: 'Database error' });
         }
 
-        // Execute the procedure service query
         pool.query(
           procedureServiceQuery,
           [patientId, start, end],
@@ -1234,7 +1226,6 @@ app.get('/master', (req, res) => {
               return res.status(500).json({ error: 'Database error' });
             }
 
-            // Execute the FB amount query
             pool.query(
               fbAmountQuery,
               [patientId, start, end],
