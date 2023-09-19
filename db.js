@@ -5,10 +5,10 @@ const app = express();
 const port = 3000;
 
 const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'theatgg6_sal_subscriber102'
+  host: '162.241.85.121',
+  user: 'athulslv_muthukumar',
+  password: 'Athulya@123',
+  database: 'athulslv_sal_subscriber102'
 };
 
 const pool = mysql.createPool(dbConfig);
@@ -1301,10 +1301,10 @@ app.get('/master', (req, res) => {
 });
 
 
-
-
 app.get('/branchSummary', (req, res) => {
   const branchId = req.query.branch_id;
+  const start = req.query.start;
+  const end = req.query.end;
 
   if (!branchId) {
     return res.status(400).json({ error: 'Missing required branch_id parameter' });
@@ -1317,16 +1317,24 @@ app.get('/branchSummary', (req, res) => {
     FROM
       patients
     WHERE
-      branch_id = ?;
+      branch_id = ?
+      AND created_at >= ?
+      AND created_at <= ?;
   `;
 
-  pool.query(patientBranchQuery, [branchId], (err, patientBranchData) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Database error' });
-    }
 
-    const patientIds = patientBranchData.map(patient => patient.patient_id);
+  pool.query(
+    patientBranchQuery,
+    [branchId, start, end], // Pass start and end dates as parameters
+    (err, patientBranchData) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      const patientIds = patientBranchData.map(patient => patient.patient_id);
+
+    
 
     const billInvoicesQuery = `
       SELECT
@@ -1471,6 +1479,254 @@ app.get('/branchSummary', (req, res) => {
     );
   });
 });
+
+
+
+app.get('/branchSummaryPending', (req, res) => {
+  const branchId = req.query.branch_id;
+  const start = req.query.start;
+  const end = req.query.end;
+
+  if (!start || !end) {
+    return res.status(400).json({ error: 'Missing required start and end date parameters' });
+  }
+
+  let branchFilter = '';
+  let branchGrouping = '';
+
+  if (branchId) {
+    branchFilter = ' AND branch_id = ?';
+    branchGrouping = ' GROUP BY branch_id, branch_name';
+  }
+
+  const patientBranchQuery = `
+    SELECT
+      p.id AS patient_id,
+      p.branch_id
+    FROM
+      patients p
+    WHERE
+      p.created_at >= ? AND p.created_at <= ?${branchFilter};
+  `;
+
+  pool.query(patientBranchQuery, [start, end, branchId], (err, patientBranchData) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    const patientIds = patientBranchData.map(patient => patient.patient_id);
+
+    const billInvoicesQuery = `
+      SELECT
+        SUM(total_amount) AS total_amount_pending
+      FROM
+        bill_invoices
+      WHERE
+        patient_id IN (?)
+        AND status != 'Pending';
+    `;
+
+    const consolidatedBillQuery = `
+      SELECT
+        SUM(amount_paid) AS total_amount_pending
+      FROM
+        consolidated_bill
+      WHERE
+        patient_id IN (?)
+        AND payment_status = 'Pending';
+    `;
+
+    const procedureServiceQuery = `
+      SELECT
+        SUM(procedure_service_amount) AS procedure_service_total
+      FROM
+        patient_activity_procedure_service
+      WHERE
+        patient_id IN (?)
+        AND invoice_status = 'Raised';
+    `;
+
+    const billInvoiceItemsQuery = `
+      SELECT
+        SUM(total_amount) AS billed_total_amount
+      FROM
+        bill_invoice_items
+      WHERE
+        patient_id IN (?)
+        AND type = 'pending';
+    `;
+
+    const fbAmountQuery = `
+      SELECT
+        SUM(fb_amount) AS fb_amount_total
+      FROM
+        patient_activity_fb
+      WHERE
+        patient_id IN (?)
+        AND invoice_status = 'pending';
+    `;
+
+    pool.query(
+      billInvoicesQuery,
+      [patientIds],
+      (err, billInvoicesData) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        pool.query(
+          consolidatedBillQuery,
+          [patientIds],
+          (err, consolidatedBillData) => {
+            if (err) {
+              console.error(err);
+              return res.status(500).json({ error: 'Database error' });
+            }
+
+            pool.query(
+              procedureServiceQuery,
+              [patientIds],
+              (err, procedureServiceData) => {
+                if (err) {
+                  console.error(err);
+                  return res.status(500).json({ error: 'Database error' });
+                }
+
+                pool.query(
+                  billInvoiceItemsQuery,
+                  [patientIds],
+                  (err, billInvoiceItemsData) => {
+                    if (err) {
+                      console.error(err);
+                      return res.status(500).json({ error: 'Database error' });
+                    }
+
+                    pool.query(
+                      fbAmountQuery,
+                      [patientIds],
+                      (err, fbAmountData) => {
+                        if (err) {
+                          console.error(err);
+                          return res.status(500).json({ error: 'Database error' });
+                        }
+
+                        const response = {
+                          total_cancelled_service: billInvoicesData[0].total_amount_pending || 0,
+                          consolidated_total_amount_pending: consolidatedBillData[0].total_amount_pending || 0,
+                          procedure_service_total: procedureServiceData[0].procedure_service_total || 0,
+                          billed_total_amount: billInvoiceItemsData[0].billed_total_amount || 0,
+                          fb_amount_total: fbAmountData[0].fb_amount_total || 0,
+                        };
+
+                        res.json(response);
+                      }
+                    );
+                  }
+                );
+              }
+            );
+          }
+        );
+      }
+    );
+  });
+});
+
+
+
+  app.get('/patientDischargeSummary', (req, res) => {
+    const start = req.query.start;
+    const end = req.query.end;
+  
+    if (!start || !end) {
+      return res.status(400).json({ error: 'Missing required start and end dates' });
+    }
+  
+    const dischargeQuery = `
+      SELECT
+        pd.id AS discharge_id,
+        pd.lead_id,
+        pd.discharge_date,
+        pd.discharge_type,
+        l.branch_id
+      FROM
+        patient_discharge pd
+      JOIN
+        leads l ON pd.lead_id = l.id
+      WHERE
+        pd.discharge_date >= ?
+        AND pd.discharge_date <= ?
+      ORDER BY
+        pd.discharge_date;
+    `;
+  
+    pool.query(dischargeQuery, [start, end], (err, dischargeData) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+  
+      const dischargeGroups = {};
+      dischargeData.forEach(discharge => {
+        const dischargeType = discharge.discharge_type;
+        if (!dischargeGroups[dischargeType]) {
+          dischargeGroups[dischargeType] = [];
+        }
+        dischargeGroups[dischargeType].push(discharge);
+      });
+  
+      const branchDischargeCounts = {};
+      dischargeData.forEach(discharge => {
+        const branchId = discharge.branch_id;
+        if (branchId) {
+          branchDischargeCounts[branchId] = (branchDischargeCounts[branchId] || 0) + 1;
+        }
+      });
+  
+      const branchIds = Object.keys(branchDischargeCounts);
+      const branchesQuery = `
+        SELECT
+          id AS branch_id,
+          branch_name
+        FROM
+          master_branches
+        WHERE
+          id IN (?);
+      `;
+  
+      pool.query(branchesQuery, [branchIds], (err, branchData) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).json({ error: 'Database error' });
+        }
+  
+        const branchNameGroups = {};
+        branchData.forEach(branch => {
+          const branchId = branch.branch_id;
+          const branchName = branch.branch_name;
+          branchNameGroups[branchName] = {
+            branch_id: branchId,
+            total_discharge: branchDischargeCounts[branchId] || 0,
+          };
+        });
+  
+        const totalDischarge = dischargeData.length;
+  
+        const response = {
+          total_discharge: totalDischarge,
+          discharge_groups: dischargeGroups,
+          branch_name_groups: branchNameGroups,
+        };
+  
+        res.json(response);
+      });
+    });
+  });
+  
+  
+  
 
 
 app.listen(port, () => {
