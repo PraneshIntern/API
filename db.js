@@ -439,7 +439,7 @@ app.get('/branch', (req, res) => {
     const start = req.query.start;
     const end = req.query.end;
   
-    // Construct the base SQL query
+   
     let query = `
   SELECT
     m.id AS branch_id,
@@ -459,21 +459,19 @@ app.get('/branch', (req, res) => {
 `;
 
   
-    // Add branch filtering if branch_id is provided
+    
     if (branchId) {
       query += `m.id = ? AND `;
     }
   
-    // Add date filtering if start and end dates are provided
     if (start && end) {
       query += `b.created_at >= ? AND b.updated_at <= ?`;
     } else {
-      // Remove the trailing "AND " if no date filtering is applied
       query = query.slice(0, -5);
     }
     pool.query(query, [branchId, start, end], (err, results) => {
       if (err) {
-        console.error(err); // Log the database error
+        console.error(err);
         return res.status(500).json({ error: 'Database error' });
       }
     
@@ -484,10 +482,9 @@ app.get('/branch', (req, res) => {
 
 
   app.get('/allInvoices', (req, res) => {
-    // Get the "list" query parameter to limit the number of results (default to 10)
     const limit = req.query.list ? parseInt(req.query.list) : 10;
   
-    // Fetch all invoice IDs from bill_invoice_items
+
     const query = 'SELECT DISTINCT invoice_id FROM bill_invoice_items';
   
     pool.query(query, (err, invoiceIds) => {
