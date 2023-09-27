@@ -92,7 +92,45 @@ app.get('/city', (req, res) => {
     });
   });
 
+app.get('/branchmainfetch', (req, res) => {
+    const city = req.query.city;
+    const state = req.query.state;
+    const country = req.query.country;
+    const branchName = req.query.branch_name;
 
+  
+    let query = 'SELECT id FROM master_branches WHERE 1';
+  
+    if (city) {
+      query += ` AND branch_city = ?`;
+    }
+  
+    if (state) {
+      query += ` AND branch_state = ?`;
+    }
+  
+    if (country) {
+      query += ` AND branch_country = ?`;
+    }
+
+    if (branchName) {
+      query += ` AND branch_name = ?`;
+    }
+  
+    const queryParams = [];
+    if (city) queryParams.push(city);
+    if (state) queryParams.push(state);
+    if (country) queryParams.push(country);
+    if (branchName) queryParams.push(branchName);
+
+    pool.query(query, queryParams, (err, results) => {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+  
+      res.json(results);
+    });
+  });
 
 app.get('/inv', (req, res) => {
   const patientId = req.query.patient_id;
